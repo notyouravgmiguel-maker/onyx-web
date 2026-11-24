@@ -1,0 +1,40 @@
+{
+  "name": "onyx-web",
+  "version": "1.0.0",
+  "description": "Official download portal and landing page for Onyx Browser",
+  "main": "index.html",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && powershell -Command \"Copy-Item -Path dist/* -Destination . -Recurse -Force\"",
+    "preview": "vite preview",
+    "start": "npx serve -l 3000 ."
+  },
+  "keywords": [
+    "onyx",
+    "browser",
+    "electron",
+    "landing-page"
+  ],
+  "author": "Onyx Team",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "framer-motion": "^14.14.0",
+    "gsap": "^3.15.1",
+    "lucide-react": "^1.78.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwind-merge": "^3.7.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.5",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "tailwindcss": "^4.3.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  }
+}
