@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { CupSoda, Droplet, Sparkles } from "lucide-react";
+import { HardDrive, ShieldCheck, Zap } from "lucide-react";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -44,22 +44,28 @@ const Badge = ({ children }: { children: ReactNode }) => (
 
 // One long sentence: words and glyphs flow in a single flex row with variable gaps.
 const flow: { node: ReactNode; gap?: string; className?: string }[] = [
-  { node: "In every bottle," },
-  { node: <Badge><CupSoda /></Badge>, className: "text-primary" },
-  { node: "discover the undeniable" },
+  { node: "Onyx opens every tab" },
+  { node: <Badge><Zap /></Badge>, className: "text-primary" },
+  { node: "Instantly,", className: "font-serif italic text-primary" },
   { node: <Wave />, gap: "0.5em", className: "text-primary/60" },
-  { node: "Real Magic", className: "font-serif italic text-primary" },
-  { node: <Sparkles className="h-[0.5em] w-[0.5em]" />, gap: "0.2em", className: "-translate-y-[0.35em] text-primary" },
-  { node: "of sharing" },
+  { node: "keeps every tracker" },
+  { node: <ShieldCheck className="h-[0.55em] w-[0.55em]" />, gap: "0.25em", className: "text-primary" },
+  { node: "Blocked,", className: "font-serif italic text-primary" },
   { node: <Loop />, gap: "0.45em", className: "text-primary/60" },
-  { node: "pure" },
-  { node: <Droplet className="h-[0.55em] w-[0.55em]" />, gap: "0.25em", className: "text-primary" },
-  { node: "Refreshment", className: "font-serif italic text-primary" },
+  { node: "saves your history on your own" },
+  { node: <Badge><HardDrive /></Badge>, gap: "0.25em", className: "text-primary" },
+  { node: "Machine", className: "font-serif italic text-primary" },
   { node: <Arc />, gap: "0.4em", className: "translate-y-[0.1em] text-primary/60" },
-  { node: "that brings us" },
+  { node: "and simply gets out of your" },
   { node: <Linked />, gap: "0.45em", className: "text-primary" },
-  { node: "Together", className: "font-semibold text-primary" },
+  { node: "Way", className: "font-semibold text-primary" },
 ];
+
+/** Screen readers get the sentence as plain text; the visual row is aria-hidden. */
+const sentence = flow
+  .map((f) => f.node)
+  .filter((n): n is string => typeof n === "string")
+  .join(" ");
 
 export function HorizontalTicker() {
   const sectionRef = useRef<HTMLElement>(null);
@@ -93,7 +99,7 @@ export function HorizontalTicker() {
   return (
     <section
       ref={sectionRef}
-      aria-label="In every bottle, discover the undeniable Real Magic of sharing pure Refreshment that brings us Together"
+      aria-label={sentence}
       className="flex h-svh items-center overflow-hidden motion-reduce:h-auto motion-reduce:py-24"
     >
       <div
