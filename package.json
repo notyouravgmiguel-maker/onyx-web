@@ -2,12 +2,11 @@
   "name": "onyx-web",
   "version": "1.0.0",
   "description": "Official download portal and landing page for Onyx Browser",
-  "main": "index.html",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && powershell -Command \"Copy-Item -Path dist/* -Destination . -Recurse -Force\"",
-    "preview": "vite preview",
-    "start": "npx serve -l 3000 ."
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build && node scripts/publish.mjs",
+    "preview": "vite preview"
   },
   "keywords": [
     "onyx",

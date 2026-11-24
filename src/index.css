@@ -1,71 +1,78 @@
 @import "tailwindcss";
 
+@theme {
+  --color-background: #0a0a0b;
+  --color-surface: #141416;
+  --color-foreground: #ededef;
+  --color-muted: #8a8a93;
+  --color-line: rgb(255 255 255 / 0.08);
+  /* Cream accent, shared with the hero. */
+  --color-primary: #e1e0cc;
+  --color-primary-foreground: #0a0a0b;
+  --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+
 @layer base {
-  :root {
-    --background: 222 47% 7%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 47% 9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 11%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --border: 217 33% 17%;
-    --radius: 1rem;
+  html {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    color-scheme: dark;
+    background: var(--color-background);
   }
 
-  html {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    color-scheme: dark;
-    scroll-behavior: smooth;
-  }
+  /* No CSS scroll-behavior: smooth — it breaks GSAP ScrollTrigger's pin refresh.
+     Smooth in-page scrolling is done in App.tsx (goTo), respecting reduced motion. */
 
   body {
-    background-color: #080c14;
-    color: #f1f5f9;
-    min-height: 100vh;
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    min-height: 100svh;
+    background: var(--color-background);
+    color: var(--color-foreground);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+      env(safe-area-inset-left);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4 {
     text-wrap: balance;
   }
 
-  .tabular-nums {
-    font-variant-numeric: tabular-nums;
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  button {
+    cursor: pointer;
   }
 }
 
-/* Glass styling without purple */
-.glass-obsidian {
-  background: rgba(15, 23, 42, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+/* Continuous (squircle) corners where the browser supports them. */
+@supports (corner-shape: squircle) {
+  .rounded-xl,
+  .rounded-2xl,
+  .rounded-3xl,
+  .rounded-\[2rem\] {
+    corner-shape: squircle;
+  }
 }
 
-.glass-pill {
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-/* Noise texture overlay for high-end aesthetic */
 .noise-overlay {
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
 }
 
-/* Minimum tap target utility */
-.touch-target-44 {
-  min-width: 44px;
-  min-height: 44px;
+/* Grows the hit area to 44x44 without changing the visual size. */
+@utility hit-44 {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
 }

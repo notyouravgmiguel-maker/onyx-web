@@ -1,113 +1,160 @@
-import React, { useState, useEffect } from "react";
-import { Search, Download, Sparkles, BookOpen, Layers, Terminal, X, ArrowUpRight } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Search } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-interface CommandMenuProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSelectAction: (action: string) => void;
+export interface CommandItem {
+  id: string;
+  title: string;
+  icon: ComponentType<{ className?: string }>;
+  /** Keyboard shortcut shown as a hint, e.g. "D". */
+  shortcut?: string;
+  run: () => void;
 }
 
-export function CommandMenu({ isOpen, onClose, onSelectAction }: CommandMenuProps) {
-  const [query, setQuery] = useState("");
+interface CommandMenuProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  items: CommandItem[];
+}
 
-  const actions = [
-    { id: "download-exe", title: "Download Onyx-Browser.exe", category: "Downloads", icon: Download, hint: "188 MB" },
-    { id: "download-zip", title: "Download Portable Runtime ZIP", category: "Downloads", icon: Download, hint: "315 MB" },
-    { id: "goto-hero", title: "Jump to Prisma Visual Canvas", category: "Showcase", icon: Sparkles, hint: "Section" },
-    { id: "goto-squeeze", title: "Interact with 3D Physics Squeeze", category: "Interactive", icon: Layers, hint: "Physics" },
-    { id: "goto-features", title: "View Core Architecture & Specs", category: "Docs", icon: BookOpen, hint: "Specs" },
-    { id: "copy-link", title: "Copy Direct Download Link", category: "Utility", icon: ArrowUpRight, hint: "Clipboard" },
-  ];
+export const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent);
+export const modKey = isMac ? "⌘" : "Ctrl ";
 
-  const filtered = actions.filter((a) =>
-    a.title.toLowerCase().includes(query.toLowerCase()) ||
-    a.category.toLowerCase().includes(query.toLowerCase())
+export function Kbd({ children, className }: { children: string; className?: string }) {
+  return (
+    <kbd
+      className={cn(
+        "rounded-md border border-line px-1.5 py-0.5 font-sans text-[11px] leading-none text-muted",
+        className
+      )}
+    >
+      {children}
+    </kbd>
   );
+}
+
+export function CommandMenu({ open, onOpenChange, items }: CommandMenuProps) {
+  const [query, setQuery] = useState("");
+  const [active, setActive] = useState(0);
+  const isSheet = open && window.matchMedia("(max-width: 639px)").matches;
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? items.filter((i) => i.title.toLowerCase().includes(q)) : items;
+  }, [items, query]);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        if (isOpen) onClose();
-        else onSelectAction("toggle-command");
-      }
-      if (e.key === "Escape" && isOpen) {
-        onClose();
+        onOpenChange(!open);
       }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose, onSelectAction]);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onOpenChange]);
+
+  useEffect(() => {
+    if (open) {
+      setQuery("");
+      setActive(0);
+    }
+  }, [open]);
+
+  const run = (item?: CommandItem) => {
+    if (!item) return;
+    onOpenChange(false);
+    item.run();
+  };
+
+  const onInputKey = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      setActive((a) => (a + step + results.length) % Math.max(results.length, 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      run(results[active]);
+    } else if (e.key === "Escape") {
+      onOpenChange(false);
+    }
+  };
 
   return (
     <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4 bg-black/60 backdrop-blur-md">
+      {open && (
+        <motion.div
+          key="backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          onClick={() => onOpenChange(false)}
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-start sm:px-4 sm:pt-[15vh]"
+        >
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: -10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: -10 }}
-            transition={{ duration: 0.15 }}
-            className="w-full max-w-lg rounded-2xl bg-slate-900 border border-white/15 shadow-2xl overflow-hidden text-slate-100"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Command menu"
+            onClick={(e) => e.stopPropagation()}
+            initial={{ opacity: 0, y: 24, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 24, scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 500, damping: 38 }}
+            // Bottom sheet on phones: drag down to dismiss.
+            drag={isSheet ? "y" : false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.6 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 80 || info.velocity.y > 500) onOpenChange(false);
+            }}
+            className="w-full overflow-hidden rounded-t-3xl border border-line bg-surface shadow-2xl sm:max-w-lg sm:rounded-2xl"
+            style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
           >
-            {/* Search Input Bar */}
-            <div className="flex items-center px-4 py-3.5 border-b border-white/10 gap-3">
-              <Search className="w-5 h-5 text-slate-400" />
+            <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-white/15 sm:hidden" aria-hidden />
+            <div className="flex items-center gap-3 border-b border-line px-4">
+              <Search className="h-4 w-4 shrink-0 text-muted" />
               <input
                 autoFocus
-                type="text"
-                placeholder="Search actions or jump to section..."
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="w-full bg-transparent text-sm outline-none placeholder:text-slate-500 text-white font-normal"
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setActive(0);
+                }}
+                onKeyDown={onInputKey}
+                placeholder="Search"
+                aria-label="Search commands"
+                className="h-14 w-full bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted"
               />
-              <kbd className="px-2 py-0.5 rounded bg-white/10 text-[10px] font-mono text-slate-400 border border-white/10">
-                ESC
-              </kbd>
+              <Kbd>Esc</Kbd>
             </div>
 
-            {/* List */}
-            <div className="max-h-80 overflow-y-auto p-2 divide-y divide-white/5">
-              {filtered.length === 0 ? (
-                <div className="py-8 text-center text-xs text-slate-500">
-                  No matching actions found.
-                </div>
-              ) : (
-                filtered.map((item) => {
-                  const Icon = item.icon;
-                  return (
+            <ul role="listbox" className="max-h-80 overflow-y-auto p-2">
+              {results.map((item, i) => {
+                const Icon = item.icon;
+                return (
+                  <li key={item.id} role="option" aria-selected={i === active}>
                     <button
-                      key={item.id}
-                      onClick={() => {
-                        onSelectAction(item.id);
-                        onClose();
-                      }}
-                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left hover:bg-white/10 transition-colors group"
+                      type="button"
+                      onMouseMove={() => setActive(i)}
+                      onClick={() => run(item)}
+                      className={cn(
+                        "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm text-foreground",
+                        i === active && "bg-white/[0.06]"
+                      )}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                          <Icon className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="text-xs font-medium text-slate-200 group-hover:text-white">
-                            {item.title}
-                          </div>
-                          <div className="text-[10px] text-slate-500">
-                            {item.category}
-                          </div>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-mono text-slate-400 bg-white/5 px-2 py-0.5 rounded border border-white/10">
-                        {item.hint}
-                      </span>
+                      <Icon className="h-4 w-4 text-muted" />
+                      <span className="flex-1">{item.title}</span>
+                      {item.shortcut && <Kbd>{item.shortcut}</Kbd>}
                     </button>
-                  );
-                })
-              )}
-            </div>
+                  </li>
+                );
+              })}
+              {results.length === 0 && <li className="px-3 py-6 text-center text-sm text-muted">No results</li>}
+            </ul>
           </motion.div>
-        </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );

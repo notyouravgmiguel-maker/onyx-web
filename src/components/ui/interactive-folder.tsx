@@ -30,13 +30,20 @@ const darkenColor = (hex: string, percent: number): string => {
   let g = (num >> 8) & 0xff;
   let b = num & 0xff;
   r = Math.max(0, Math.min(255, Math.floor(r * (1 - percent))));
-  g = Math.max(0, Math.min(255, Math.floor(r * (1 - percent))));
-  b = Math.max(0, Math.min(255, Math.floor(r * (1 - percent))));
+  g = Math.max(0, Math.min(255, Math.floor(g * (1 - percent))));
+  b = Math.max(0, Math.min(255, Math.floor(b * (1 - percent))));
   return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
 };
 
+/** Perceived brightness 0–1, used to keep the label readable on any folder colour. */
+const luminance = (hex: string): number => {
+  const c = darkenColor(hex, 0).slice(1);
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(c.slice(i, i + 2), 16) / 255);
+  return 0.299 * r + 0.587 * g + 0.114 * b;
+};
+
 export function InteractiveFolder({ 
-  color = '#2563EB', // Sleek Onyx Blue (replacing purple)
+  color = '#E1E0CC',
   size = 1, 
   items = [], 
   className = '',
@@ -97,12 +104,16 @@ export function InteractiveFolder({
   };
 
   return (
-    <div 
+    <div
       className={`relative flex items-center justify-center ${className}`}
-      style={{ transform: `scale(${size})`, width: 120, height: 100 }}
+      style={{ width: 120 * size, height: 100 * size }}
     >
-      <div
-        className="relative cursor-pointer group select-none"
+      <button
+        type="button"
+        aria-label={label}
+        aria-expanded={isOpen}
+        className="relative cursor-pointer group select-none rounded-xl"
+        style={{ transform: `scale(${size})` }}
         onClick={() => setIsOpen(!isOpen)}
       >
         {/* Folder Back */}
@@ -165,7 +176,7 @@ export function InteractiveFolder({
             style={{
               backgroundColor: color,
               borderRadius: '6px 12px 12px 12px',
-              clipPath: 'polygon(0 0, 50% 0, 50% 100%, 0 100%)'
+              clipPath: 'polygon(0 0, 50.5% 0, 50.5% 100%, 0 100%)' // overlap hides the seam
             }}
           />
 
@@ -183,15 +194,22 @@ export function InteractiveFolder({
               borderRadius: '6px 12px 12px 12px',
               clipPath: 'polygon(50% 0, 100% 0, 100% 100%, 50% 100%)'
             }}
-          >
-             {label && !isOpen && (
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/90 text-[10px] font-semibold tracking-wider uppercase whitespace-nowrap px-2">
-                {label}
-              </div>
-            )}
-          </motion.div>
+          />
+
+          {/* Label sits above both flap halves so their clip paths never cut it. */}
+          {label && (
+            <motion.div
+              aria-hidden
+              animate={{ opacity: isOpen ? 0 : 1 }}
+              transition={{ duration: 0.15 }}
+              className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center text-[10px] font-medium tracking-tight whitespace-nowrap"
+              style={{ color: luminance(color) > 0.6 ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.9)' }}
+            >
+              {label}
+            </motion.div>
+          )}
         </div>
-      </div>
+      </button>
     </div>
   );
 }

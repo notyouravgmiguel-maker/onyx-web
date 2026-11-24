@@ -1,115 +1,117 @@
-import React, { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import gsap from "gsap";
-import { Sparkles, Compass, ShieldCheck, Zap, Globe, Layers } from "lucide-react";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { CupSoda, Droplet, Sparkles } from "lucide-react";
+
+gsap.registerPlugin(ScrollTrigger);
+
+/* Inline glyphs that sit in the sentence like punctuation. Sized in em so they track the type. */
+const Wave = () => (
+  <svg viewBox="0 0 120 40" className="h-[0.6em] w-[1.8em]" fill="none" aria-hidden>
+    <path d="M2 20 C 22 2, 38 2, 60 20 S 98 38, 118 20" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+  </svg>
+);
+
+const Loop = () => (
+  <svg viewBox="0 0 120 40" className="h-[0.7em] w-[2em]" fill="none" aria-hidden>
+    <path
+      d="M2 30 C 30 30, 40 6, 60 6 C 80 6, 80 34, 60 34 C 40 34, 40 6, 70 6 C 90 6, 100 30, 118 30"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+const Arc = () => (
+  <svg viewBox="0 0 80 40" className="h-[0.5em] w-[1em]" fill="none" aria-hidden>
+    <path d="M4 36 Q 40 -10, 76 36" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+  </svg>
+);
+
+const Linked = () => (
+  <svg viewBox="0 0 80 48" className="h-[0.7em] w-[1.2em]" fill="none" aria-hidden>
+    <circle cx="28" cy="24" r="18" stroke="currentColor" strokeWidth="3" />
+    <circle cx="52" cy="24" r="18" stroke="currentColor" strokeWidth="3" />
+  </svg>
+);
+
+const Badge = ({ children }: { children: ReactNode }) => (
+  <span className="inline-flex h-[0.9em] w-[0.9em] items-center justify-center rounded-full border border-primary/30 [&>svg]:h-[0.45em] [&>svg]:w-[0.45em]">
+    {children}
+  </span>
+);
+
+// One long sentence: words and glyphs flow in a single flex row with variable gaps.
+const flow: { node: ReactNode; gap?: string; className?: string }[] = [
+  { node: "In every bottle," },
+  { node: <Badge><CupSoda /></Badge>, className: "text-primary" },
+  { node: "discover the undeniable" },
+  { node: <Wave />, gap: "0.5em", className: "text-primary/60" },
+  { node: "Real Magic", className: "font-serif italic text-primary" },
+  { node: <Sparkles className="h-[0.5em] w-[0.5em]" />, gap: "0.2em", className: "-translate-y-[0.35em] text-primary" },
+  { node: "of sharing" },
+  { node: <Loop />, gap: "0.45em", className: "text-primary/60" },
+  { node: "pure" },
+  { node: <Droplet className="h-[0.55em] w-[0.55em]" />, gap: "0.25em", className: "text-primary" },
+  { node: "Refreshment", className: "font-serif italic text-primary" },
+  { node: <Arc />, gap: "0.4em", className: "translate-y-[0.1em] text-primary/60" },
+  { node: "that brings us" },
+  { node: <Linked />, gap: "0.45em", className: "text-primary" },
+  { node: "Together", className: "font-semibold text-primary" },
+];
 
 export function HorizontalTicker() {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!trackRef.current) return;
-
-    // Smooth horizontal marquee ticker animation
+  useLayoutEffect(() => {
+    const section = sectionRef.current;
     const track = trackRef.current;
-    const tween = gsap.to(track, {
-      xPercent: -50,
-      ease: "none",
-      duration: 28,
-      repeat: -1,
-    });
+    if (!section || !track) return;
 
-    let lastScroll = window.scrollY;
-    const handleScroll = () => {
-      const currentScroll = window.scrollY;
-      const delta = currentScroll - lastScroll;
-      lastScroll = currentScroll;
-
-      // React to scroll velocity like a physical tape
-      gsap.to(tween, {
-        timeScale: 1 + Math.min(Math.abs(delta) * 0.05, 4),
-        duration: 0.3,
-        onComplete: () => {
-          gsap.to(tween, { timeScale: 1, duration: 0.8 });
+    const mm = gsap.matchMedia();
+    mm.add("(prefers-reduced-motion: no-preference)", () => {
+      const distance = () => track.scrollWidth - window.innerWidth;
+      gsap.to(track, {
+        x: () => -distance(),
+        ease: "none",
+        scrollTrigger: {
+          trigger: section,
+          start: "top top",
+          end: () => `+=${distance()}`,
+          pin: true,
+          scrub: 0.6,
+          invalidateOnRefresh: true,
         },
       });
-    };
+    });
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-      tween.kill();
-    };
+    return () => mm.revert();
   }, []);
 
-  const renderContent = () => (
-    <div className="flex items-center space-x-8 sm:space-x-12 px-6 shrink-0">
-      <span className="text-2xl sm:text-4xl md:text-5xl font-light text-slate-300 tracking-tight">
-        In every bottle
-      </span>
-
-      {/* Inline visual element acting as punctuation / conjunction */}
-      <span className="inline-flex items-center justify-center w-10 h-10 sm:w-14 sm:h-14 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400">
-        <Sparkles className="w-5 h-5 sm:w-7 sm:h-7 animate-pulse" />
-      </span>
-
-      <span className="text-2xl sm:text-4xl md:text-5xl font-serif italic text-slate-100">
-        discover the undeniable
-      </span>
-
-      {/* SVG wavy connector */}
-      <svg className="w-16 sm:w-24 h-6 text-blue-400" viewBox="0 0 100 24" fill="none">
-        <path d="M0 12 Q 25 0, 50 12 T 100 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-      </svg>
-
-      <span className="text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tighter text-white bg-clip-text">
-        Real Magic
-      </span>
-
-      <span className="inline-flex items-center justify-center px-4 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-xs sm:text-sm font-mono text-blue-300">
-        <Zap className="w-3.5 h-3.5 mr-1.5 text-blue-400 inline" /> 60 FPS Flow
-      </span>
-
-      <span className="text-2xl sm:text-4xl md:text-5xl font-light text-slate-300">
-        of sharing pure
-      </span>
-
-      <span className="text-2xl sm:text-4xl md:text-5xl font-semibold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-teal-300">
-        Refreshment
-      </span>
-
-      <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-slate-300">
-        <Compass className="w-4 h-4" />
-      </span>
-
-      <span className="text-2xl sm:text-4xl md:text-5xl font-serif italic text-slate-200">
-        that brings us
-      </span>
-
-      {/* Pill badge */}
-      <span className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white border-b-2 border-blue-500 pb-1">
-        Together
-      </span>
-
-      <span className="text-slate-600 text-3xl font-light select-none">•</span>
-    </div>
-  );
-
   return (
-    <div 
-      ref={containerRef}
-      className="relative w-full py-12 overflow-hidden border-y border-white/10 bg-[#070b12] select-none"
+    <section
+      ref={sectionRef}
+      aria-label="In every bottle, discover the undeniable Real Magic of sharing pure Refreshment that brings us Together"
+      className="flex h-svh items-center overflow-hidden motion-reduce:h-auto motion-reduce:py-24"
     >
-      {/* Edge gradient masks for seamless ticker look */}
-      <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-24 sm:w-40 z-10 bg-gradient-to-r from-[#070b12] to-transparent" />
-      <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-24 sm:w-40 z-10 bg-gradient-to-l from-[#070b12] to-transparent" />
-
-      {/* Infinite Flex Track */}
-      <div ref={trackRef} className="flex whitespace-nowrap will-change-transform">
-        {renderContent()}
-        {renderContent()}
+      <div
+        ref={trackRef}
+        aria-hidden
+        className="flex items-center whitespace-nowrap px-[8vw] text-[13vw] font-medium leading-none tracking-[-0.04em] text-foreground will-change-transform motion-reduce:flex-wrap motion-reduce:whitespace-normal motion-reduce:text-[10vw] md:text-[9vw]"
+      >
+        {flow.map((item, i) => (
+          <span
+            key={i}
+            className={`inline-flex shrink-0 items-center ${item.className ?? ""}`}
+            style={{ marginRight: item.gap ?? "0.3em" }}
+          >
+            {item.node}
+          </span>
+        ))}
       </div>
-    </div>
+    </section>
   );
 }
 

@@ -1,386 +1,303 @@
-import React, { useState, useEffect } from "react";
-import { 
-  Download, 
-  Terminal, 
-  ShieldCheck, 
-  Database, 
-  Layers, 
-  Cpu, 
-  Sparkles, 
-  FileText, 
-  Image as ImageIcon, 
-  Music, 
-  Code, 
-  Bookmark, 
-  FolderDown, 
-  Search, 
-  Check, 
-  ExternalLink 
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MotionConfig } from "framer-motion";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import {
+  Bookmark,
+  Cpu,
+  Database,
+  Download,
+  FileArchive,
+  FileText,
+  Layers,
+  Link2,
+  Music,
+  Search,
+  ShieldCheck,
+  Image as ImageIcon,
+  ArrowDown,
+  LayoutGrid,
 } from "lucide-react";
-import { PrismaHero } from "./components/ui/prisma-hero";
-import { JellySqueeze } from "./components/ui/jelly-squeeze";
-import { InteractiveFolder } from "./components/ui/interactive-folder";
-import { HorizontalTicker } from "./components/ui/horizontal-ticker";
-import { CommandMenu } from "./components/ui/command-menu";
-import { UndoToast } from "./components/ui/undo-toast";
+import icon from "../assets/icon.png";
+import { PrismaHero } from "@/components/ui/prisma-hero";
+import { HorizontalTicker } from "@/components/ui/horizontal-ticker";
+import { InteractiveFolder } from "@/components/ui/interactive-folder";
+import { CommandMenu, Kbd, modKey, type CommandItem } from "@/components/ui/command-menu";
+import { Toast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
+
+const FILES = {
+  exe: { name: "Onyx-Browser.exe", size: "301 MB" },
+  zip: { name: "Onyx-Browser-win-x64.zip", size: "301 MB" },
+} as const;
+type Format = keyof typeof FILES;
+
+/** Where the installers live: downloads/ on WAMP, the GitHub Release on Pages (set at build time). */
+const DOWNLOAD_BASE = import.meta.env.VITE_DOWNLOAD_BASE ?? "downloads/";
+const fileUrl = (name: string) => new URL(DOWNLOAD_BASE + name, location.href).href;
+
+/** Ignore repeat clicks on the same file for this long, so a double tap never starts two 300 MB downloads. */
+const DOWNLOAD_DEDUPE_MS = 5000;
+
+const scrollToId = (id: string, smooth = true) => {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.getElementById(id)?.scrollIntoView({ behavior: smooth && !reduce ? "smooth" : "auto" });
+};
+
+/** In-page navigation that also lands in history, so Back returns to where you were. */
+const goTo = (id: string) => {
+  if (location.hash !== `#${id}`) history.pushState(null, "", `#${id}`);
+  scrollToId(id);
+};
+
+const specs = [
+  { icon: Layers, title: "BaseWindow views" },
+  { icon: Database, title: "Local SQLite" },
+  { icon: ShieldCheck, title: "Tracker blocking" },
+  { icon: Cpu, title: "Electron 33" },
+];
 
 export function App() {
-  const [commandOpen, setCommandOpen] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
-  const [showToast, setShowToast] = useState(false);
-  const [activeTab, setActiveTab] = useState<"installer" | "portable">("installer");
+  const [format, setFormat] = useState<Format>("exe");
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const lastDownload = useRef<{ name: string; at: number } | null>(null);
+  const closeToast = useCallback(() => setToast(null), []);
 
-  const triggerToast = (msg: string) => {
-    setToastMessage(msg);
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 5000);
-  };
-
-  const handleDownload = (format: "installer" | "portable" = "installer") => {
-    // Generate idempotency key for download action
-    const idempotencyKey = `dl_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    const filename = format === "installer" ? "Onyx-Browser.exe" : "Onyx-Browser-win-x64.zip";
-    const url = `downloads/${filename}`;
-
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-
-    triggerToast(`Starting download: ${filename}`);
-  };
-
-  const handleCommandAction = (actionId: string) => {
-    if (actionId === "download-exe") {
-      handleDownload("installer");
-    } else if (actionId === "download-zip") {
-      handleDownload("portable");
-    } else if (actionId === "goto-hero") {
-      document.getElementById("hero-section")?.scrollIntoView({ behavior: "smooth" });
-    } else if (actionId === "goto-squeeze") {
-      document.getElementById("download-section")?.scrollIntoView({ behavior: "smooth" });
-    } else if (actionId === "goto-features") {
-      document.getElementById("architecture-section")?.scrollIntoView({ behavior: "smooth" });
-    } else if (actionId === "copy-link") {
-      const fullUrl = `${window.location.origin}${window.location.pathname}downloads/Onyx-Browser.exe`;
-      navigator.clipboard.writeText(fullUrl);
-      triggerToast("Download URL copied to clipboard");
-    } else if (actionId === "toggle-command") {
-      setCommandOpen(prev => !prev);
+  const download = useCallback((which: Format) => {
+    const { name } = FILES[which];
+    const now = Date.now();
+    if (lastDownload.current?.name === name && now - lastDownload.current.at < DOWNLOAD_DEDUPE_MS) {
+      setToast(`${name} is already downloading`);
+      return;
     }
-  };
+    lastDownload.current = { name, at: now };
+
+    const a = document.createElement("a");
+    a.href = fileUrl(name);
+    a.download = name;
+    a.click();
+    setToast(`Downloading ${name}`);
+  }, []);
+
+  const copyLink = useCallback(async () => {
+    const url = fileUrl(FILES[format].name);
+    try {
+      await navigator.clipboard.writeText(url);
+      setToast("Link copied");
+    } catch {
+      setToast(url);
+    }
+  }, [format]);
+
+  const commands = useMemo<CommandItem[]>(
+    () => [
+      { id: "dl", title: `Download ${FILES[format].name}`, icon: Download, shortcut: "D", run: () => download(format) },
+      { id: "dl-exe", title: "Download .exe", icon: Download, run: () => download("exe") },
+      { id: "dl-zip", title: "Download .zip", icon: FileArchive, run: () => download("zip") },
+      { id: "copy", title: "Copy download link", icon: Link2, run: copyLink },
+      { id: "go-download", title: "Go to Download", icon: ArrowDown, run: () => goTo("download") },
+      { id: "go-features", title: "Go to Features", icon: LayoutGrid, run: () => goTo("features") },
+    ],
+    [format, download, copyLink]
+  );
+
+  // Smooth-scroll every "#id" link, honour deep links once pins are laid out, and follow Back/Forward.
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement).closest<HTMLAnchorElement>('a[href^="#"]');
+      const id = a?.getAttribute("href")!.slice(1);
+      if (!id || !document.getElementById(id)) return;
+      e.preventDefault();
+      goTo(id);
+    };
+    const onPop = () => {
+      const id = location.hash.slice(1);
+      if (id) scrollToId(id);
+      else window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+    // The pinned ticker changes page height, so jump only after ScrollTrigger has measured it.
+    const onLoad = () => {
+      const id = location.hash.slice(1);
+      if (!id) return;
+      const jump = () => {
+        ScrollTrigger.removeEventListener("refresh", jump);
+        scrollToId(id, false);
+      };
+      ScrollTrigger.addEventListener("refresh", jump);
+      ScrollTrigger.refresh();
+    };
+
+    document.addEventListener("click", onClick);
+    window.addEventListener("popstate", onPop);
+    if (document.readyState === "complete") onLoad();
+    else window.addEventListener("load", onLoad, { once: true });
+    return () => {
+      document.removeEventListener("click", onClick);
+      window.removeEventListener("popstate", onPop);
+      window.removeEventListener("load", onLoad);
+    };
+  }, []);
+
+  // "D" downloads the selected format from anywhere on the page.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (paletteOpen || e.metaKey || e.ctrlKey || e.altKey || t.matches("input, textarea, [contenteditable]")) return;
+      if (e.key.toLowerCase() === "d") download(format);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [download, format, paletteOpen]);
 
   return (
-    <div className="relative min-h-screen bg-[#080c14] text-slate-100 flex flex-col font-sans selection:bg-blue-600/30 selection:text-white">
-      {/* Top Header */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl bg-[#080c14]/80 border-b border-white/10">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <img src="assets/icon.png" alt="Onyx" className="w-8 h-8 rounded-lg shadow-md shadow-blue-500/20" />
-            <span className="font-bold text-base tracking-tight text-white">Onyx</span>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-              v1.0.0
-            </span>
-          </div>
+    <MotionConfig reducedMotion="user">
+      <header className="sticky top-0 z-40 border-b border-line bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-4 sm:px-6">
+          <a href="#" className="mr-auto flex min-h-11 items-center gap-2.5 text-sm font-semibold tracking-tight">
+            <img src={icon} alt="" width={24} height={24} className="h-6 w-6 rounded-md" />
+            Onyx
+          </a>
 
-          <nav className="hidden md:flex items-center space-x-8 text-xs font-medium text-slate-400">
-            <a href="#hero-section" className="hover:text-white transition-colors">Showcase</a>
-            <a href="#download-section" className="hover:text-white transition-colors">Physics Core</a>
-            <a href="#resources-section" className="hover:text-white transition-colors">Interactive Folders</a>
-            <a href="#architecture-section" className="hover:text-white transition-colors">Architecture</a>
-          </nav>
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            title={`Search (${modKey}K)`}
+            aria-label="Search"
+            className="flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-xl px-2 text-muted transition-colors hover:text-foreground"
+          >
+            <Search className="h-4 w-4" />
+            <Kbd className="hidden sm:inline">{`${modKey}K`}</Kbd>
+          </button>
 
-          <div className="flex items-center space-x-3">
-            {/* Command Menu Trigger */}
-            <button
-              onClick={() => setCommandOpen(true)}
-              className="touch-target-44 inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-300 transition-colors"
-              title="Open Command Palette (Ctrl+K)"
-            >
-              <Search className="w-3.5 h-3.5 text-slate-400" />
-              <span className="hidden sm:inline">Search</span>
-              <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-[10px] font-mono text-slate-400">⌘K</kbd>
-            </button>
-
-            {/* Quick Download */}
-            <button
-              onClick={() => handleDownload("installer")}
-              className="touch-target-44 inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-lg shadow-blue-600/25 transition-all active:scale-95"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Download</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => download(format)}
+            title="Download (D)"
+            className="hit-44 inline-flex h-9 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition-transform active:scale-[0.97]"
+          >
+            <Download className="h-4 w-4" />
+            Download
+          </button>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col space-y-24 pb-20">
-        
-        {/* Section 1: Prisma Hero Canvas */}
-        <section id="hero-section" className="w-full pt-4 px-4 sm:px-6 max-w-7xl mx-auto">
-          <PrismaHero />
-        </section>
+      <main>
+        <div className="px-2 pt-2 sm:px-4 sm:pt-4">
+          <PrismaHero
+            title="Onyx"
+            description="A fast, private browser for Windows."
+            ctaLabel="Download"
+            onCtaClick={() => goTo("download")}
+            navItems={[
+              { label: "Download", href: "#download" },
+              { label: "Features", href: "#features" },
+            ]}
+            className="h-[calc(100svh-4rem)] sm:h-[calc(100svh-5rem)]"
+          />
+        </div>
 
-        {/* Section 2: Continuous GSAP Scroll Ticker */}
-        <section className="w-full">
-          <HorizontalTicker />
-        </section>
+        <HorizontalTicker />
 
-        {/* Section 3: Interactive Download Section with JellySqueeze Physics */}
-        <section id="download-section" className="max-w-5xl mx-auto px-6 w-full">
-          <div className="text-center mb-8">
-            <span className="text-xs font-semibold tracking-wider uppercase text-blue-400">
-              Interactive Hardware Acceleration
+        <section id="download" className="mx-auto flex max-w-xl scroll-mt-14 flex-col items-center px-4 py-32 sm:py-40">
+          <h2 className="text-4xl font-medium tracking-tight sm:text-5xl">Download</h2>
+
+          <button
+            type="button"
+            onClick={() => download(format)}
+            title="Download (D)"
+            className="group mt-10 inline-flex h-14 items-center gap-3 rounded-full bg-primary pl-7 pr-2 text-base font-medium text-primary-foreground transition-transform active:scale-[0.98]"
+          >
+            Download for Windows
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black transition-transform group-hover:translate-y-0.5">
+              <Download className="h-4 w-4 text-primary" />
             </span>
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mt-2">
-              Feel the Responsiveness
-            </h2>
-          </div>
+          </button>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            {/* Jelly Component */}
-            <div className="lg:col-span-7">
-              <JellySqueeze 
-                title="Drag vertically to squeeze" 
-                showControls={true} 
-                onDownload={() => handleDownload(activeTab)}
-              />
-            </div>
-
-            {/* Download Hub Card */}
-            <div className="lg:col-span-5 flex flex-col justify-center space-y-6 p-8 rounded-3xl border border-white/10 bg-slate-900/60 backdrop-blur-xl">
-              <div>
-                <span className="text-[11px] font-mono text-emerald-400 uppercase tracking-wider">
-                  Verified Binary Build
-                </span>
-                <h3 className="text-2xl font-bold text-white mt-1">
-                  Ready for Windows
-                </h3>
-              </div>
-
-              {/* Tab Selector for Format */}
-              <div className="flex rounded-xl bg-white/5 p-1 border border-white/10">
+          <div className="mt-6 flex items-center gap-4">
+            <div role="radiogroup" aria-label="Format" className="flex rounded-xl border border-line p-1">
+              {(Object.keys(FILES) as Format[]).map((f) => (
                 <button
-                  onClick={() => setActiveTab("installer")}
-                  className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
-                    activeTab === "installer"
-                      ? "bg-blue-600 text-white shadow-md"
-                      : "text-slate-400 hover:text-white"
-                  }`}
+                  key={f}
+                  type="button"
+                  role="radio"
+                  aria-checked={format === f}
+                  onClick={() => setFormat(f)}
+                  className={cn(
+                    "min-h-11 min-w-16 rounded-lg px-4 text-sm transition-colors",
+                    format === f ? "bg-white/[0.08] text-foreground" : "text-muted hover:text-foreground"
+                  )}
                 >
-                  Setup Installer (.exe)
+                  .{f}
                 </button>
-                <button
-                  onClick={() => setActiveTab("portable")}
-                  className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
-                    activeTab === "portable"
-                      ? "bg-blue-600 text-white shadow-md"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  Portable ZIP (.zip)
-                </button>
-              </div>
-
-              {/* Specs List */}
-              <div className="space-y-3 text-xs text-slate-300">
-                <div className="flex justify-between py-1.5 border-b border-white/5">
-                  <span className="text-slate-400">Platform</span>
-                  <span className="font-medium text-white">Windows 10 / 11 (64-bit)</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-white/5">
-                  <span className="text-slate-400">File Size</span>
-                  <span className="font-mono tabular-nums text-white">
-                    {activeTab === "installer" ? "188 MB (Standalone)" : "315 MB (Full Runtime)"}
-                  </span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-white/5">
-                  <span className="text-slate-400">Runtime Core</span>
-                  <span className="font-medium text-white">Electron 33 • Chromium 130</span>
-                </div>
-                <div className="flex justify-between py-1.5">
-                  <span className="text-slate-400">Integrity Check</span>
-                  <span className="font-mono text-emerald-400">Self-Contained DLLs Included</span>
-                </div>
-              </div>
-
-              {/* Primary Action Button */}
-              <button
-                onClick={() => handleDownload(activeTab)}
-                className="w-full touch-target-44 flex items-center justify-center space-x-2 py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-sm shadow-xl shadow-blue-600/30 hover:scale-[1.01] active:scale-[0.99] transition-all"
-              >
-                <Download className="w-4 h-4" />
-                <span>
-                  {activeTab === "installer" ? "Download Onyx-Browser.exe" : "Download Onyx-Browser-win-x64.zip"}
-                </span>
-              </button>
-
-              <div className="text-[11px] text-slate-500 text-center">
-                Runs out of the box with zero setup dependencies.
-              </div>
+              ))}
             </div>
+            <span className="text-sm tabular-nums text-muted">{FILES[format].size}</span>
           </div>
         </section>
 
-        {/* Section 4: Interactive Folders Showcase */}
-        <section id="resources-section" className="max-w-6xl mx-auto px-6 w-full">
-          <div className="text-center mb-12">
-            <span className="text-xs font-semibold tracking-wider uppercase text-blue-400">
-              Interactive Storage Architecture
-            </span>
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mt-2">
-              Organized with Tactile Precision
-            </h2>
+        <section id="features" className="mx-auto max-w-5xl scroll-mt-14 px-4 pb-24 sm:pb-32">
+          <h2 className="text-center text-4xl font-medium tracking-tight sm:text-5xl">Features</h2>
+
+          <div className="mt-16 grid grid-cols-1 place-items-center gap-y-20 sm:grid-cols-3">
+            <InteractiveFolder
+              size={1.4}
+              color="#E1E0CC"
+              label="Downloads"
+              items={[
+                <Download key="1" className="h-6 w-6 text-zinc-500" />,
+                <FileText key="2" className="h-6 w-6 text-zinc-500" />,
+                <FileArchive key="3" className="h-6 w-6 text-zinc-500" />,
+              ]}
+            />
+            <InteractiveFolder
+              size={1.4}
+              color="#3F3F46"
+              label="Bookmarks"
+              items={[
+                <Bookmark key="1" className="h-6 w-6 text-zinc-500" />,
+                <ImageIcon key="2" className="h-6 w-6 text-zinc-500" />,
+                <Link2 key="3" className="h-6 w-6 text-zinc-500" />,
+              ]}
+            />
+            <InteractiveFolder
+              size={1.4}
+              color="#27272A"
+              label="Media"
+              items={[
+                <Music key="1" className="h-6 w-6 text-zinc-500" />,
+                <Layers key="2" className="h-6 w-6 text-zinc-500" />,
+                <Cpu key="3" className="h-6 w-6 text-zinc-500" />,
+              ]}
+            />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Folder 1: Downloads */}
-            <div className="flex flex-col items-center p-8 rounded-3xl border border-white/10 bg-slate-900/40 backdrop-blur-lg">
-              <InteractiveFolder 
-                size={1.2} 
-                color="#2563EB" 
-                label="DOWNLOADS"
-                items={[
-                  <FolderDown key="1" className="w-6 h-6 text-blue-400" />,
-                  <FileText key="2" className="w-6 h-6 text-slate-300" />,
-                  <Code key="3" className="w-6 h-6 text-emerald-400" />
-                ]}
-              />
-              <h4 className="font-semibold text-sm text-white mt-6">Downloads Manager</h4>
-              <p className="text-xs text-slate-400 text-center mt-2">
-                Automated unique file path collision resolution with instant desktop reveal.
-              </p>
-            </div>
-
-            {/* Folder 2: Bookmarks */}
-            <div className="flex flex-col items-center p-8 rounded-3xl border border-white/10 bg-slate-900/40 backdrop-blur-lg">
-              <InteractiveFolder 
-                size={1.2} 
-                color="#0D9488" 
-                label="BOOKMARKS"
-                items={[
-                  <Bookmark key="1" className="w-6 h-6 text-teal-400" />,
-                  <Sparkles key="2" className="w-6 h-6 text-amber-300" />,
-                  <ImageIcon key="3" className="w-6 h-6 text-teal-200" />
-                ]}
-              />
-              <h4 className="font-semibold text-sm text-white mt-6">Glassmorphic Bookmarks</h4>
-              <p className="text-xs text-slate-400 text-center mt-2">
-                Offline local SQLite persistence with fast search and cached favicons.
-              </p>
-            </div>
-
-            {/* Folder 3: Sessions */}
-            <div className="flex flex-col items-center p-8 rounded-3xl border border-white/10 bg-slate-900/40 backdrop-blur-lg">
-              <InteractiveFolder 
-                size={1.2} 
-                color="#334155" 
-                label="MEDIA SESSIONS"
-                items={[
-                  <Music key="1" className="w-6 h-6 text-blue-300" />,
-                  <Layers key="2" className="w-6 h-6 text-slate-400" />,
-                  <Cpu key="3" className="w-6 h-6 text-indigo-400" />
-                ]}
-              />
-              <h4 className="font-semibold text-sm text-white mt-6">Universal Media Hub</h4>
-              <p className="text-xs text-slate-400 text-center mt-2">
-                Cross-frame audio capture with play/pause/seek controls for any active tab.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* Section 5: Architecture Specifications */}
-        <section id="architecture-section" className="max-w-6xl mx-auto px-6 w-full">
-          <div className="rounded-3xl border border-white/10 bg-slate-900/50 p-8 sm:p-12">
-            <div className="max-w-2xl mb-10">
-              <span className="text-xs font-semibold tracking-wider uppercase text-blue-400">
-                Core Engineering
-              </span>
-              <h2 className="text-2xl sm:text-3xl font-bold text-white mt-2">
-                Built Without Compromise
-              </h2>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="p-5 rounded-2xl bg-white/5 border border-white/5">
-                <Layers className="w-6 h-6 text-blue-400 mb-3" />
-                <h4 className="font-semibold text-sm text-white">BaseWindow Multi-View</h4>
-                <p className="text-xs text-slate-400 mt-1">
-                  Decoupled WebContentsView stack eliminating iframe overhead.
-                </p>
-              </div>
-
-              <div className="p-5 rounded-2xl bg-white/5 border border-white/5">
-                <Database className="w-6 h-6 text-teal-400 mb-3" />
-                <h4 className="font-semibold text-sm text-white">Dual SQLite Engine</h4>
-                <p className="text-xs text-slate-400 mt-1">
-                  Native better-sqlite3 with an instant WASM sql.js fallback.
-                </p>
-              </div>
-
-              <div className="p-5 rounded-2xl bg-white/5 border border-white/5">
-                <ShieldCheck className="w-6 h-6 text-emerald-400 mb-3" />
-                <h4 className="font-semibold text-sm text-white">Zero Telemetry</h4>
-                <p className="text-xs text-slate-400 mt-1">
-                  Local favicon cache directly via net.fetch. No third-party leaks.
-                </p>
-              </div>
-
-              <div className="p-5 rounded-2xl bg-white/5 border border-white/5">
-                <Cpu className="w-6 h-6 text-indigo-400 mb-3" />
-                <h4 className="font-semibold text-sm text-white">Frameless Canvas</h4>
-                <p className="text-xs text-slate-400 mt-1">
-                  Seamless borderless window with integrated frosted controls.
-                </p>
-              </div>
-            </div>
-          </div>
+          <ul className="mt-24 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line lg:grid-cols-4">
+            {specs.map(({ icon: Icon, title }) => (
+              <li key={title} className="flex items-center gap-3 bg-background p-5 text-sm">
+                <Icon className="h-4 w-4 text-muted" />
+                {title}
+              </li>
+            ))}
+          </ul>
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-white/10 py-10 bg-[#060910]">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-          <div className="flex items-center space-x-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-medium text-slate-400">Onyx Browser Project</span>
-            <span>•</span>
-            <span>Open Architecture</span>
-          </div>
-
-          <div className="flex items-center space-x-6">
-            <a href="downloads/Onyx-Browser.exe" download className="hover:text-slate-300 transition-colors">
-              Onyx-Browser.exe
-            </a>
-            <a href="downloads/Onyx-Browser-win-x64.zip" download className="hover:text-slate-300 transition-colors">
-              Portable ZIP
-            </a>
-            <button onClick={() => setCommandOpen(true)} className="hover:text-slate-300 transition-colors">
-              Palette (⌘K)
-            </button>
-          </div>
+      <footer className="border-t border-line">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-6 text-sm text-muted sm:px-6">
+          <span>Onyx · MIT</span>
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            className="flex min-h-11 items-center gap-2 transition-colors hover:text-foreground"
+          >
+            Commands <Kbd>{`${modKey}K`}</Kbd>
+          </button>
         </div>
       </footer>
 
-      {/* Command Menu Palette */}
-      <CommandMenu
-        isOpen={commandOpen}
-        onClose={() => setCommandOpen(false)}
-        onSelectAction={handleCommandAction}
-      />
-
-      {/* Undo Toast */}
-      <UndoToast
-        message={toastMessage}
-        isVisible={showToast}
-        onClose={() => setShowToast(false)}
-        onUndo={() => triggerToast("Action reverted")}
-      />
-    </div>
+      <CommandMenu open={paletteOpen} onOpenChange={setPaletteOpen} items={commands} />
+      <Toast message={toast} onClose={closeToast} />
+    </MotionConfig>
   );
 }
 

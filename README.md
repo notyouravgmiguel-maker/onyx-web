@@ -17,22 +17,22 @@ Official web landing page and download hub for **Onyx Browser**, the high-perfor
 
 ## 📦 Downloads
 
-- Direct Executable: [`downloads/Onyx-Browser.exe`](downloads/Onyx-Browser.exe)
-- Full Portable ZIP Bundle: [`downloads/Onyx-Browser-win-x64.zip`](downloads/Onyx-Browser-win-x64.zip)
+Installers are published as assets of the latest [GitHub Release](../../releases/latest) (too large for the repo or Pages).
+The public site is deployed to GitHub Pages by `.github/workflows/pages.yml` on every push to `main`.
 
 ---
 
 ## 🌐 Running Locally
 
-### Via WAMP / Apache:
-Since this is located under `c:\wamp\www\onyx-web`, if WAMP is running, open:
-[http://localhost/onyx-web/](http://localhost/onyx-web/)
+Source lives in `src/` (entry: `src/index.html`). The project root holds the **built** site, which WAMP serves at [http://localhost/onyx-web/](http://localhost/onyx-web/).
 
-### Via Node static server:
 ```bash
-npx serve -l 3000 .
+npm run dev        # Vite dev server; /downloads is proxied to WAMP
+npm run typecheck
+npm run build      # typecheck, build to dist/, publish into the project root
 ```
-Then visit [http://localhost:3000](http://localhost:3000).
+
+Never edit the root `index.html` or `assets/index-*` — they are overwritten by `npm run build`.
 
 ---
 
